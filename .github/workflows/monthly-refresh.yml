@@ -1,0 +1,36 @@
+name: monthly-refresh
+# FORGE autonomy layer — keeps freshness signals alive with zero manual work.
+# Bumps the visible "Updated" stamp + sitemap lastmod, redeploys Pages, pings IndexNow.
+# Data re-scrape stays manual until an engine earns its scraper budget.
+
+on:
+  schedule:
+    - cron: "17 9 1 * *" # 09:17 UTC on the 1st of every month
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump freshness stamps
+        run: |
+          STAMP=$(date -u +%Y-%m)
+          TODAY=$(date -u +%Y-%m-%d)
+          sed -i "s/Updated [0-9]\{4\}-[0-9]\{2\}/Updated $STAMP/" phoenix-plumbers/index.html
+          sed -i "s|<lastmod>[^<]*</lastmod>|<lastmod>$TODAY</lastmod>|" sitemap.xml
+
+      - name: Commit and push
+        run: |
+          git config user.name "forge-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "chore: monthly freshness refresh $(date -u +%Y-%m)"
+          git push
+
+      - name: IndexNow ping
+        run: |
+          curl -s "https://api.indexnow.org/indexnow?url=https://ridleyacheson-glitch.github.io/local-rankings/phoenix-plumbers/&key=e5910689c9cd41f9a5a9af1bcf2aae53"
